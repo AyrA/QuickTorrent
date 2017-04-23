@@ -141,6 +141,7 @@ Without arguments the application tries to interpret its file name as a hash.");
             while (Console.ReadKey(true).Key != ConsoleKey.Escape) ;
             cont = false;
             T.Join();
+            TorrentHandler.SaveDhtNodes();
             return RET.SUCCESS;
         }
 

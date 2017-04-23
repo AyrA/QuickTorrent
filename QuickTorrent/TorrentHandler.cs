@@ -128,7 +128,7 @@ namespace QuickTorrent
 
         public TorrentHandler(MagnetLink ML, string DownloadDir = DOWNLOAD_DIR)
         {
-            InitBase();
+            InitBase(DownloadDir);
             TM = new TorrentManager(ML, Environment.ExpandEnvironmentVariables(DownloadDir), TS, Environment.ExpandEnvironmentVariables(TORRENT_DIR));
             Assign();
 
@@ -136,7 +136,7 @@ namespace QuickTorrent
 
         public TorrentHandler(Torrent T, string DownloadDir = DOWNLOAD_DIR)
         {
-            InitBase();
+            InitBase(DownloadDir);
             PieceMap = new bool[T.Pieces.Count];
             TM = new TorrentManager(T, Environment.ExpandEnvironmentVariables(DownloadDir), TS);
             Assign();
@@ -145,8 +145,8 @@ namespace QuickTorrent
 
         public TorrentHandler(InfoHash H, string DownloadDir = DOWNLOAD_DIR)
         {
-            InitBase();
-            TM = new TorrentManager(H, DownloadDir, TS, TORRENT_DIR, new List<RawTrackerTier>());
+            InitBase(DownloadDir);
+            TM = new TorrentManager(H,Environment.ExpandEnvironmentVariables(DownloadDir), TS, Environment.ExpandEnvironmentVariables(TORRENT_DIR), new List<RawTrackerTier>());
             Assign();
         }
 
@@ -160,11 +160,11 @@ namespace QuickTorrent
             TM.Stop();
         }
 
-        private void InitBase()
+        private void InitBase(string DownloadDir)
         {
-            if (!Directory.Exists(Environment.ExpandEnvironmentVariables(DOWNLOAD_DIR)))
+            if (!Directory.Exists(Environment.ExpandEnvironmentVariables(DownloadDir)))
             {
-                Directory.CreateDirectory(Environment.ExpandEnvironmentVariables(DOWNLOAD_DIR));
+                Directory.CreateDirectory(Environment.ExpandEnvironmentVariables(DownloadDir));
             }
             if (!Directory.Exists(Environment.ExpandEnvironmentVariables(TORRENT_DIR)))
             {
@@ -193,7 +193,7 @@ namespace QuickTorrent
             {
                 if (ES == null)
                 {
-                    ES = new EngineSettings(Environment.ExpandEnvironmentVariables(DOWNLOAD_DIR), 54321, 100, 50, 0, 0, EncryptionTypes.All);
+                    ES = new EngineSettings(Environment.ExpandEnvironmentVariables(DownloadDir), 54321, 100, 50, 0, 0, EncryptionTypes.All);
                 }
                 if (CE == null)
                 {
