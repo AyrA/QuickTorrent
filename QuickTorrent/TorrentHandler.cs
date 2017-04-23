@@ -112,7 +112,7 @@ namespace QuickTorrent
         {
             get
             {
-                return TM.Torrent.Name;
+                return TM.Torrent?.Name == null ? TM.InfoHash.ToHex() : TM.Torrent.Name;
             }
         }
 

@@ -2,10 +2,12 @@
 using MonoTorrent.Common;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 
 namespace QuickTorrent
 {
@@ -13,8 +15,32 @@ namespace QuickTorrent
     {
         private static List<TorrentHandler> Handler;
 
-        static void Main(string[] args)
+        private struct RET
         {
+            /// <summary>
+            /// The application executed successfully
+            /// </summary>
+            public const int SUCCESS = 0;
+            /// <summary>
+            /// Help was shown
+            /// </summary>
+            public const int HELP = 255;
+            /// <summary>
+            /// Invalid argument
+            /// </summary>
+            public const int ARGUMENT_ERROR = 1;
+            /// <summary>
+            /// Invalid executable name for a hash
+            /// </summary>
+            public const int NAME_ERROR = 2;
+        }
+
+        public static int Main(string[] args)
+        {
+#if DEBUG
+            args = new string[] { "40F90995A1C16A1BF454D09907F57700F3E8BD64" };
+#endif
+            Handler = new List<TorrentHandler>();
             if (args.Length > 0)
             {
                 if (!args.Contains("/?"))
@@ -36,6 +62,7 @@ namespace QuickTorrent
                         else
                         {
                             Console.Error.WriteLine("Invalid Argument. Only file names, magnet links and hashes are supported.");
+                            return RET.ARGUMENT_ERROR;
                         }
                     }
                 }
@@ -48,11 +75,86 @@ MagnetLink   - Magnet link to download that can be found in the DHT network
 InfoHash     - SHA1 hash of a torrent that can be found in the DHT network
 
 Without arguments the application tries to interpret its file name as a hash.");
+                    return RET.HELP;
                 }
             }
             else
             {
+                var Hash = Process.GetCurrentProcess().MainModule.FileName.Split(Path.DirectorySeparatorChar).Last().Split('.')[0];
+                if (ValidHex(Hash))
+                {
+                    Handler.Add(new TorrentHandler(ParseHash(Hash)));
+                }
+                else
+                {
+                    Console.Error.WriteLine("No arguments given and file name not valid Infohash");
+                    return RET.NAME_ERROR;
+                }
             }
+            foreach (var H in Handler.Where(m => m != null))
+            {
+                H.Start();
+            }
+
+            bool cont = true;
+            Thread T = new Thread(delegate ()
+            {
+                const int NAMELENGTH = 20;
+                while (cont)
+                {
+                    Console.SetCursorPosition(0, 0);
+                    foreach (var H in Handler.Where(m => m != null))
+                    {
+                        string Name = H.TorrentName == null ? "" : H.TorrentName;
+                        //Subtraction is name length, percentage and the two spaces
+                        var Map = new string(StretchMap(H.Map, Console.BufferWidth - NAMELENGTH - 6).Select(m => m ? '█' : '░').ToArray());
+                        if (Name.Length > NAMELENGTH)
+                        {
+                            Name = Name.Substring(0, NAMELENGTH);
+                        }
+                        switch (H.State)
+                        {
+                            case TorrentState.Metadata:
+                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                break;
+                            case TorrentState.Hashing:
+                            case TorrentState.Downloading:
+                                Console.ForegroundColor = ConsoleColor.Green;
+                                break;
+                            case TorrentState.Seeding:
+                                Console.ForegroundColor = ConsoleColor.Blue;
+                                break;
+                            default:
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                break;
+                        }
+
+                        Console.Write("{0,-" + NAMELENGTH + "} {1,3}% {2}", Name, (int)H.Progress, Map);
+                    }
+                    Console.ResetColor();
+                    Thread.Sleep(500);
+                }
+            })
+            { IsBackground = true, Name = "Status" };
+            T.Start();
+
+            while (Console.ReadKey(true).Key != ConsoleKey.Escape) ;
+            cont = false;
+            T.Join();
+            return RET.SUCCESS;
+        }
+
+        private static bool[] StretchMap(bool[] Map, int Count)
+        {
+            bool[] Ret = new bool[Count];
+            if (Map != null)
+            {
+                for (double i = 0; i < Count; i++)
+                {
+                    Ret[(int)i] = Map[(int)(Map.Length * i / Count)];
+                }
+            }
+            return Ret;
         }
 
         private static MagnetLink ParseLink(string Arg)
@@ -62,7 +164,7 @@ Without arguments the application tries to interpret its file name as a hash.");
 
         private static InfoHash ParseHash(string Arg)
         {
-            return new InfoHash(s2b(Arg));
+            return ValidHex(Arg) ? new InfoHash(s2b(Arg)) : null;
         }
 
         private static Torrent ParseTorrent(string Arg)
@@ -75,7 +177,8 @@ Without arguments the application tries to interpret its file name as a hash.");
             try
             {
                 s2b(hexString);
-                return true;
+                //Torrent hashes are 20 bytes. A valid hex string has double the size.
+                return hexString.Length == 40;
             }
             catch
             {
@@ -100,6 +203,7 @@ Without arguments the application tries to interpret its file name as a hash.");
             return HexAsBytes;
         }
 
+        /*
         private static void TH_PiecemapUpdate(object Sender, PiecemapEventArgs Args)
         {
             const char EMPTY = '░';
@@ -130,5 +234,6 @@ Without arguments the application tries to interpret its file name as a hash.");
                 }
             }
         }
+        //*/
     }
 }
