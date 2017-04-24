@@ -35,7 +35,7 @@ This is only used if no arguments are provided.
 The interface is very crude at the moment:
 
 - `ESC`: Shutdown all transfers and exit.
-- `??`: Select menu entry.
+- `↑↓`: Select menu entry.
 - `SPACE`: Start/Stop a transfer
 
 All downloads are initially in the started mode and the mode is not saved when exiting.
