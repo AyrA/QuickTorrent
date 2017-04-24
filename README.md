@@ -47,8 +47,8 @@ The entries in the transfer list are color coded:
 - **cyan**: This torrent is checking the local files for integrity
 - **yellow**: This torrent is searching for metadata in the DHT network
 - **red**: This torrent has an error. Usually happens because the output file(s) are in use otherwise.
-- **gray**: This torrent is stopped.
-- **dark gray**: This torrent is paused.
+- **gray**: This torrent is stopped. Use menu actions to start it if you want.
+- **dark gray**: This torrent is paused. *This achievement is currently unobtainable*
 
 ## TODO
 
