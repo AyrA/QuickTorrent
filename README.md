@@ -50,7 +50,7 @@ The entries in the transfer list are color coded:
 - **gray**: This torrent is stopped. Use menu actions to start it if you want.
 - **dark gray**: This torrent is paused. *This achievement is currently unobtainable*
 
-![UI Demo](http://i.imgur.com/LJqJUnF.png)
+![UI Demo](https://i.imgur.com/LJqJUnF.png)
 
 ## TODO
 
