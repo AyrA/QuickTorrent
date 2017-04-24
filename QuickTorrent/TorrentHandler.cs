@@ -50,6 +50,7 @@ namespace QuickTorrent
 
         private TorrentManager TM;
         private TorrentSettings TS;
+        private bool[] PieceMap;
 
         public bool HasAllPieces
         {
@@ -116,6 +117,20 @@ namespace QuickTorrent
                 return TM.Peers.Leechs;
             }
         }
+        public int Files
+        {
+            get
+            {
+                return TM.Torrent != null ? TM.Torrent.Files.Length : 0;
+            }
+        }
+        public long TotalSize
+        {
+            get
+            {
+                return TM.HasMetadata ? TM.Torrent.Size : 0;
+            }
+        }
         public string TorrentName
         {
             get
@@ -123,9 +138,13 @@ namespace QuickTorrent
                 return TM.Torrent?.Name == null ? TM.InfoHash.ToHex() : TM.Torrent.Name;
             }
         }
-
-        private bool[] PieceMap;
-
+        public string InfoHash
+        {
+            get
+            {
+                return TM.InfoHash.ToHex();
+            }
+        }
         public bool[] Map
         {
             get
@@ -247,15 +266,18 @@ namespace QuickTorrent
 
         public void SaveRecovery()
         {
-            var RecoveryFile = Environment.ExpandEnvironmentVariables(TORRENT_DIR + $"\\{TM.InfoHash.ToHex()}.rec");
-            var FR = TM.SaveFastResume();
-            if (File.Exists(RecoveryFile))
+            if (TM.HasMetadata)
             {
-                File.Delete(RecoveryFile);
-            }
-            using (var FS = File.Create(RecoveryFile))
-            {
-                FR.Encode(FS);
+                var RecoveryFile = Environment.ExpandEnvironmentVariables(TORRENT_DIR + $"\\{TM.InfoHash.ToHex()}.rec");
+                var FR = TM.SaveFastResume();
+                if (File.Exists(RecoveryFile))
+                {
+                    File.Delete(RecoveryFile);
+                }
+                using (var FS = File.Create(RecoveryFile))
+                {
+                    FR.Encode(FS);
+                }
             }
         }
 

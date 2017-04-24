@@ -34,13 +34,24 @@ This is only used if no arguments are provided.
 
 The interface is very crude at the moment:
 
-- `ESC`: Shutdown all transfers and exit.
 - `↑↓`: Select menu entry.
+- `ENTER`: Show transfer details.
 - `SPACE`: Start/Stop a transfer
+- `ESC`: Close details view. Shutdown all transfers and exit on main view.
 
-All downloads are initially in the started mode and the mode is not saved when exiting.
+All downloads are initially started and the mode is not saved when exiting.
 
-The entries in the transfer list are color coded:
+The transfer details shows:
+
+- Larger progress map
+- Progress percentage
+- Full torrent name
+- Info hash
+- Number of files
+- Total size
+- Torrent state
+
+The entries in the transfer list and details view are color coded:
 
 - **blue**: This torrent is complete and is seeding
 - **green**: This torrent is downloading
