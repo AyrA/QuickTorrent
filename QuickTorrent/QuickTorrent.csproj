@@ -32,12 +32,13 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="MonoTorrent, Version=0.80.0.0, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="MonoTorrent, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\monotorrent\build\MonoTorrent\Release\MonoTorrent.dll</HintPath>
+      <HintPath>..\..\monotorrent\build\MonoTorrent\Debug\MonoTorrent.dll</HintPath>
     </Reference>
-    <Reference Include="MonoTorrent.Dht">
-      <HintPath>..\..\monotorrent\build\MonoTorrent\Release\MonoTorrent.Dht.dll</HintPath>
+    <Reference Include="MonoTorrent.Dht, Version=0.70.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\monotorrent\build\MonoTorrent\Debug\MonoTorrent.Dht.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />

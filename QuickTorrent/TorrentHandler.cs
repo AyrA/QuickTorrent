@@ -1,4 +1,5 @@
 ﻿using MonoTorrent;
+using MonoTorrent.BEncoding;
 using MonoTorrent.Client;
 using MonoTorrent.Client.Encryption;
 using MonoTorrent.Common;
@@ -50,11 +51,18 @@ namespace QuickTorrent
         private TorrentManager TM;
         private TorrentSettings TS;
 
+        public bool HasAllPieces
+        {
+            get
+            {
+                return PieceMap.All(m => m);
+            }
+        }
         public bool IsComplete
         {
             get
             {
-                return TM.State == TorrentState.Seeding;
+                return TM.Complete || TM.State == TorrentState.Seeding;
             }
         }
         public bool IsPaused
@@ -143,11 +151,31 @@ namespace QuickTorrent
 
         }
 
-        public TorrentHandler(InfoHash H, string DownloadDir = DOWNLOAD_DIR)
+        public TorrentHandler(InfoHash H, string DownloadDir = DOWNLOAD_DIR, bool ForceHash = false)
         {
             InitBase(DownloadDir);
-            TM = new TorrentManager(H,Environment.ExpandEnvironmentVariables(DownloadDir), TS, Environment.ExpandEnvironmentVariables(TORRENT_DIR), new List<RawTrackerTier>());
+            var CacheFile = Environment.ExpandEnvironmentVariables(TORRENT_DIR + $"\\{H.ToHex()}.torrent");
+            //Use cached torrent file if available
+            if (!ForceHash && File.Exists(CacheFile))
+            {
+                Torrent T = Torrent.Load(File.ReadAllBytes(CacheFile));
+                TM = new TorrentManager(T, Environment.ExpandEnvironmentVariables(DownloadDir), TS);
+            }
+            else
+            {
+                TM = new TorrentManager(H, Environment.ExpandEnvironmentVariables(DownloadDir), TS, Environment.ExpandEnvironmentVariables(TORRENT_DIR), new List<RawTrackerTier>());
+            }
             Assign();
+        }
+
+        public static void StartAll()
+        {
+            CE.StartAll();
+        }
+
+        public static void StopAll()
+        {
+            CE.StopAll();
         }
 
         public void Start()
@@ -193,7 +221,7 @@ namespace QuickTorrent
             {
                 if (ES == null)
                 {
-                    ES = new EngineSettings(Environment.ExpandEnvironmentVariables(DownloadDir), 54321, 100, 50, 0, 0, EncryptionTypes.All);
+                    ES = new EngineSettings(Environment.ExpandEnvironmentVariables(DownloadDir), 54321, 500, 250, 0, 0, EncryptionTypes.All);
                 }
                 if (CE == null)
                 {
@@ -201,7 +229,34 @@ namespace QuickTorrent
                     CE.RegisterDht(DE);
                 }
             }
-            TS = new TorrentSettings(10);
+            TS = new TorrentSettings(10, 200, 0, 0);
+        }
+
+        public void SetComplete()
+        {
+            PieceMap = PieceMap.Select(m => true).ToArray();
+        }
+
+        public void Hash()
+        {
+            if (TM.State != TorrentState.Hashing)
+            {
+                TM.HashCheck(true);
+            }
+        }
+
+        public void SaveRecovery()
+        {
+            var RecoveryFile = Environment.ExpandEnvironmentVariables(TORRENT_DIR + $"\\{TM.InfoHash.ToHex()}.rec");
+            var FR = TM.SaveFastResume();
+            if (File.Exists(RecoveryFile))
+            {
+                File.Delete(RecoveryFile);
+            }
+            using (var FS = File.Create(RecoveryFile))
+            {
+                FR.Encode(FS);
+            }
         }
 
         private void Assign()
@@ -224,6 +279,12 @@ namespace QuickTorrent
                 PieceMap[b.Piece.Index] = true;
                 PiecemapUpdate(this, new PiecemapEventArgs(Map, b.Piece.Index));
             };
+
+            var RecoveryFile = Environment.ExpandEnvironmentVariables(TORRENT_DIR + $"\\{TM.InfoHash.ToHex()}.rec");
+            if (File.Exists(RecoveryFile))
+            {
+                TM.LoadFastResume(new FastResume((BEncodedDictionary)BEncodedDictionary.Decode(File.ReadAllBytes(RecoveryFile))));
+            }
 
             CE.Register(TM);
         }

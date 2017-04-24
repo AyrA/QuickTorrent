@@ -13,6 +13,8 @@ namespace QuickTorrent
 {
     class Program
     {
+        private const int UI_UPDATE_INTERVAL = 2000;
+
         private static List<TorrentHandler> Handler;
 
         private struct RET
@@ -38,7 +40,27 @@ namespace QuickTorrent
         public static int Main(string[] args)
         {
 #if DEBUG
-            args = new string[] { "40F90995A1C16A1BF454D09907F57700F3E8BD64" };
+            args = new string[] {
+                /* <-- Use two slashes to swap the hashes below
+
+                //Debian DVD images
+                "40F90995A1C16A1BF454D09907F57700F3E8BD64",
+                "86F72E6B829C7E2D089B5CF0D1DED09122E65CA4",
+                "E355364EBEB5838B27705C68F85B20A950110B8F"
+
+                /*/
+
+                //Debian CD images
+                "A7055D06E5A8F7F816EC01AC7F7F5243D3CB008F",
+                "63515D99E2A99E79526E35C9A39A1DFD843027A0",
+                "297ACD1A5D6BA3E1AB881E27ACB73843A6E81430",
+                "9E2C34C3FD30D25FED9A23D93FCC69AE546C1D10",
+                "A887676B3E790DD28A92772B776199529F477762",
+                "7980011D310EB8B6F8F5F593E82F83510901CE1C",
+                "90C52B25375F12432D504BAD7F587E5543F22FDA",
+                "1DADBB8451DDDF23ADB276D0C887EF60EC49989E"
+                //*/
+            };
 #endif
             Handler = new List<TorrentHandler>();
             if (args.Length > 0)
@@ -91,57 +113,139 @@ Without arguments the application tries to interpret its file name as a hash.");
                     return RET.NAME_ERROR;
                 }
             }
-            foreach (var H in Handler.Where(m => m != null))
+            for (int i = 0; i < Handler.Count; i++)
             {
-                H.Start();
+                if (Handler[i] == null)
+                {
+                    Handler.RemoveAt(i--);
+                }
             }
+            TorrentHandler.StartAll();
+
+            Console.Title = $"QuickTorrent: {Handler.Count(m => m != null)} transfers";
 
             bool cont = true;
+            bool update = false;
+            int Selected = 0;
             Thread T = new Thread(delegate ()
             {
-                const int NAMELENGTH = 20;
+                const int NAMELENGTH = 30;
                 while (cont)
                 {
+                    int CurrentSelected = Selected;
                     Console.SetCursorPosition(0, 0);
-                    foreach (var H in Handler.Where(m => m != null))
+                    for(int j=0;j<Handler.Count;j++)
                     {
+                        var H = Handler[j];
                         string Name = H.TorrentName == null ? "" : H.TorrentName;
-                        //Subtraction is name length, percentage and the two spaces
-                        var Map = new string(StretchMap(H.Map, Console.BufferWidth - NAMELENGTH - 6).Select(m => m ? '█' : '░').ToArray());
+                        //Subtraction is: name length, percentage and the 4 spaces
+                        var Map = new string(StretchMap(H.Map, Console.BufferWidth - NAMELENGTH - 8).Select(m => m ? '█' : '░').ToArray());
                         if (Name.Length > NAMELENGTH)
                         {
-                            Name = Name.Substring(0, NAMELENGTH);
+                            Name = Name.Substring(Name.Length - NAMELENGTH, NAMELENGTH);
                         }
+                        Console.ForegroundColor = ConsoleColor.White;
+                        Console.Error.Write("{0} ", Selected == j ? '►' : ' ');
                         switch (H.State)
                         {
                             case TorrentState.Metadata:
                                 Console.ForegroundColor = ConsoleColor.Yellow;
                                 break;
                             case TorrentState.Hashing:
+                                Console.ForegroundColor = ConsoleColor.Cyan;
+                                break;
                             case TorrentState.Downloading:
                                 Console.ForegroundColor = ConsoleColor.Green;
+                                if (H.HasAllPieces && (int)H.Progress == 100)
+                                {
+                                    H.Stop();
+                                    H.SaveRecovery();
+                                    H.Start();
+                                }
                                 break;
                             case TorrentState.Seeding:
                                 Console.ForegroundColor = ConsoleColor.Blue;
+                                if (!H.HasAllPieces)
+                                {
+                                    //Assume that this torrent is complete
+                                    H.SetComplete();
+                                }
+                                break;
+                            case TorrentState.Stopped:
+                            case TorrentState.Stopping:
+                                Console.ForegroundColor = ConsoleColor.Gray;
+                                break;
+                            case TorrentState.Paused:
+                                Console.ForegroundColor = ConsoleColor.DarkGray;
                                 break;
                             default:
                                 Console.ForegroundColor = ConsoleColor.Red;
                                 break;
                         }
 
-                        Console.Write("{0,-" + NAMELENGTH + "} {1,3}% {2}", Name, (int)H.Progress, Map);
+                        Console.Error.Write("{0,-" + NAMELENGTH + "} {1,3}% {2}", Name, (int)H.Progress, Map);
                     }
                     Console.ResetColor();
-                    Thread.Sleep(500);
+                    int i = 0;
+                    //This makes the thread responsive to exit calls (cont=false)
+                    while(cont && i < UI_UPDATE_INTERVAL && CurrentSelected == Selected && !update)
+                    {
+                        i += 100;
+                        Thread.Sleep(100);
+                    }
+                    update = false;
                 }
             })
             { IsBackground = true, Name = "Status" };
             T.Start();
 
-            while (Console.ReadKey(true).Key != ConsoleKey.Escape) ;
-            cont = false;
+            while (cont)
+            {
+                var H = Handler[Selected];
+                switch (Console.ReadKey(true).Key)
+                {
+                    case ConsoleKey.Escape:
+                        cont = false;
+                        break;
+                    case ConsoleKey.UpArrow:
+                        if (--Selected < 0)
+                        {
+                            Selected = 0;
+                        }
+                        break;
+                    case ConsoleKey.DownArrow:
+                        if (++Selected >= Handler.Count)
+                        {
+                            Selected = Handler.Count - 1;
+                        }
+                        break;
+                    case ConsoleKey.Spacebar:
+                        if (H.State == TorrentState.Stopped)
+                        {
+                            H.Start();
+                            update = true;
+                        }
+                        else if (H.State != TorrentState.Stopping &&
+                            H.State != TorrentState.Error &&
+                            H.State != TorrentState.Paused)
+                        {
+                            H.Stop();
+                            update = true;
+                        }
+                        break;
+                }
+            }
             T.Join();
+            Console.Error.WriteLine("Exiting...");
+            TorrentHandler.StopAll();
+            foreach (var H in Handler.Where(m => m != null))
+            {
+                Console.Error.Write('.');
+                H.SaveRecovery();
+                H.Dispose();
+            }
             TorrentHandler.SaveDhtNodes();
+            Console.Error.WriteLine("DONE. Cleaning up...");
             return RET.SUCCESS;
         }
 
@@ -203,38 +307,5 @@ Without arguments the application tries to interpret its file name as a hash.");
 
             return HexAsBytes;
         }
-
-        /*
-        private static void TH_PiecemapUpdate(object Sender, PiecemapEventArgs Args)
-        {
-            const char EMPTY = '░';
-            const char FULL = '█';
-            //const string TOP = "╔═╗";
-            //const char LR = '║';
-            //const string BOTTOM = "╚═╝";
-            var Handler = (TorrentHandler)Sender;
-
-            if (Args.Piecemap != null)
-            {
-                double count = Console.BufferWidth * (Console.WindowHeight - 1);
-                var SB = new StringBuilder((int)count);
-                for (double d = 0; d < count; d++)
-                {
-                    SB.Append(Args.Piecemap[(int)(Args.Piecemap.Length * d / count)] ? FULL : EMPTY);
-                }
-                lock ("PIECE_PRINT")
-                {
-                    var ProgressText = $"QuickTorrent {Handler.TorrentName}; {Math.Round(Handler.Progress, 1)}%; State: {Handler.State}; S/L: {Handler.Seeds}/{Handler.Leechs}";
-                    if (Console.Title != ProgressText)
-                    {
-                        Console.Title = ProgressText;
-                    }
-                    var CurrentMap = SB.ToString();
-                    Console.SetCursorPosition(0, 0);
-                    Console.Write(SB.ToString());
-                }
-            }
-        }
-        //*/
     }
 }

@@ -1,5 +1,8 @@
-# QuickTorrent
+﻿# QuickTorrent
 Minimalistic torrent client for people who don't torrent frequently
+
+**This application is not meant to be used often. The download algorithm is not very efficient.**
+This application is primarily meant to be used by people who do not want to install a torrent client.
 
 ## Building
 
@@ -20,10 +23,32 @@ You can supply any number of command line arguments.
 In this case the application detects if you meant a magnet link, file name or info hash.
 File names have precedence over info hashes.
 This is usually not a problem because torrent files end in `.torrent` which is not part of an infohash.
+To just download a torrent file, drag it onto the executable.
 
 ### File name
 
-You can name the application in the format `<InfoHash>.exe` (without brackets) and it will use that hash for downloading
+You can name the application in the format `<InfoHash>.exe` (without brackets) and it will use that hash for downloading.
+This is only used if no arguments are provided.
+
+## Interface
+
+The interface is very crude at the moment:
+
+- `ESC`: Shutdown all transfers and exit.
+- `??`: Select menu entry.
+- `SPACE`: Start/Stop a transfer
+
+All downloads are initially in the started mode and the mode is not saved when exiting.
+
+The entries in the transfer list are color coded:
+
+- **blue**: This torrent is complete and is seeding
+- **green**: This torrent is downloading
+- **cyan**: This torrent is checking the local files for integrity
+- **yellow**: This torrent is searching for metadata in the DHT network
+- **red**: This torrent has an error. Usually happens because the output file(s) are in use otherwise.
+- **gray**: This torrent is stopped.
+- **dark gray**: This torrent is paused.
 
 ## TODO
 
@@ -36,17 +61,17 @@ Here is the basic todo/feature list. This is not necessarily in the order it wil
 - [X] Handle multiple torrents at once
 - [ ] Join multiple instances into one
 - [ ] Possibility for configuration (download path, ports, speeds)
-- [ ] User interface
-- [ ] Fast resume
+- [ ] Better User interface
+- [ ] Resolve bug with torrents stuck in "green" state but have all pieces.
+- [X] Fast resume
 
-### Current state
+### Current limitations
 
 With the state the TODO list is in, the solution has these limitations:
 
 - Saves metadata and configuration/state files in APPDATA (non portable)
-- Hardcoded Port for connections (`54321`)
+- Hardcoded Port for connections (`54321`) and connection count
 - Only one instance at the moment ~~with a single torrent~~
 - All speeds are unrestricted
-- Saves torrents in the users download folder
-- You have to wait for it to scan the entire torrent content if you load a partially downloaded torrent.
-- No user interface. Just shows progress of downloads. Close with `ESC`
+- Hardcoded download path: User download folder
+- Only very crude interface.
