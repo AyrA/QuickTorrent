@@ -8,10 +8,11 @@ This application is primarily meant to be used by people who do not want to inst
 
 Clone this repository and build. I used VS2015 Community edition.
 To run it you need [MonoTorrent](https://github.com/mono/monotorrent).
+Just clone it too and build. You can then set the reference in the QuickTorrent project to the two DLL files in the "bin" folder.
 
 ## Downloading
 
-There are no releases yet but I will do one shortly.
+Current version: 1.0. Check the [release section](https://github.com/AyrA/QuickTorrent/releases) for more details.
 
 ## Using
 
