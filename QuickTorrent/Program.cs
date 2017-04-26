@@ -15,6 +15,7 @@ namespace QuickTorrent
     {
         private const int UI_UPDATE_INTERVAL = 1000;
 
+        private static bool LaunchedFromCmd;
         private static List<TorrentHandler> Handler;
 
         private struct RET
@@ -39,6 +40,7 @@ namespace QuickTorrent
 
         public static int Main(string[] args)
         {
+            LaunchedFromCmd = (ParentProcessUtilities.GetParentProcessName().ToLower() == Environment.ExpandEnvironmentVariables("%COMSPEC%").ToLower());
 #if DEBUG
             args = new string[] {
                 /* <-- Use two slashes to swap the hashes below
@@ -84,6 +86,7 @@ namespace QuickTorrent
                         else
                         {
                             Console.Error.WriteLine("Invalid Argument. Only file names, magnet links and hashes are supported.");
+                            WaitForExit();
                             return RET.ARGUMENT_ERROR;
                         }
                     }
@@ -97,6 +100,7 @@ MagnetLink   - Magnet link to download that can be found in the DHT network
 InfoHash     - SHA1 hash of a torrent that can be found in the DHT network
 
 Without arguments the application tries to interpret its file name as a hash.");
+                    WaitForExit();
                     return RET.HELP;
                 }
             }
@@ -110,6 +114,7 @@ Without arguments the application tries to interpret its file name as a hash.");
                 else
                 {
                     Console.Error.WriteLine("No arguments given and file name not valid Infohash");
+                    WaitForExit();
                     return RET.NAME_ERROR;
                 }
             }
@@ -195,15 +200,15 @@ Name:     {0}
 Hash:     {1}
 Files:    {2} ({3})
 State:    {4,-20}
-Progress: {5:0.00}%", H.TorrentName, H.InfoHash, H.Files, NiceSize(H.TotalSize), H.State,Math.Round(H.Progress,2));
+Progress: {5:0.00}%", H.TorrentName, H.InfoHash, H.Files, NiceSize(H.TotalSize), H.State, Math.Round(H.Progress, 2));
                         var Map = new string(StretchMap(H.Map, Console.BufferWidth * (Console.WindowHeight - 8)).Select(m => m ? '█' : '░').ToArray());
                         Console.Error.Write("{0}[ESC] Back", Map);
                         Console.ResetColor();
                     }
-                    
+
                     int i = 0;
                     //This makes the thread responsive to exit calls (cont=false)
-                    while(cont && i < UI_UPDATE_INTERVAL && CurrentSelected == Selected && !update)
+                    while (cont && i < UI_UPDATE_INTERVAL && CurrentSelected == Selected && !update)
                     {
                         i += 100;
                         Thread.Sleep(100);
@@ -236,7 +241,7 @@ Progress: {5:0.00}%", H.TorrentName, H.InfoHash, H.Files, NiceSize(H.TotalSize),
                         {
                             Selected = 0;
                         }
-                        else if(RenderDetail)
+                        else if (RenderDetail)
                         {
                             Console.Clear();
                         }
@@ -246,7 +251,7 @@ Progress: {5:0.00}%", H.TorrentName, H.InfoHash, H.Files, NiceSize(H.TotalSize),
                         {
                             Selected = Handler.Count - 1;
                         }
-                        else if(RenderDetail)
+                        else if (RenderDetail)
                         {
                             Console.Clear();
                         }
@@ -284,6 +289,15 @@ Progress: {5:0.00}%", H.TorrentName, H.InfoHash, H.Files, NiceSize(H.TotalSize),
             TorrentHandler.SaveDhtNodes();
             Console.Error.WriteLine("DONE. Cleaning up...");
             return RET.SUCCESS;
+        }
+
+        private static void WaitForExit()
+        {
+            if (!LaunchedFromCmd)
+            {
+                Console.WriteLine("Press any key to continue");
+                Console.ReadKey(true);
+            }
         }
 
         private static string NiceSize(double SizeInBytes)
