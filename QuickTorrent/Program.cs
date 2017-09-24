@@ -179,7 +179,7 @@ Without arguments the application tries to interpret its file name as a hash.");
             {
                 #region Torrent Loop
                 const int NAMELENGTH = 30;
-                while (cont)
+                while (cont && Handler.Count(m => m != null) > 0)
                 {
                     Console.Title = $"QuickTorrent: {Handler.Count(m => m != null)} transfers";
 
