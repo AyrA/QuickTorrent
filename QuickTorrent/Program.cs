@@ -65,29 +65,38 @@ namespace QuickTorrent
             };
 #endif
             Handler = new List<TorrentHandler>();
+            //Allows adding torrents via pipe
+            Pipe.HashAdded += delegate (string Hash)
+            {
+                var Entry = GetHandler(Hash);
+                if (Entry != null)
+                {
+                    lock (Handler)
+                    {
+                        Handler.Add(Entry);
+                    }
+#if !DEBUG
+                    Entry.Start();
+#endif
+                }
+            };
+
             if (args.Length > 0)
             {
                 if (!args.Contains("/?"))
                 {
                     foreach (var arg in args)
                     {
-                        if (arg.ToLower().StartsWith("magnet:"))
-                        {
-                            Handler.Add(new TorrentHandler(ParseLink(arg)));
-                        }
-                        else if (File.Exists(arg))
-                        {
-                            Handler.Add(new TorrentHandler(ParseTorrent(arg)));
-                        }
-                        else if (ValidHex(arg))
-                        {
-                            Handler.Add(new TorrentHandler(ParseHash(arg)));
-                        }
-                        else
+                        var HandlerEntry = GetHandler(arg);
+                        if (HandlerEntry == null)
                         {
                             Console.Error.WriteLine("Invalid Argument. Only file names, magnet links and hashes are supported.");
                             WaitForExit();
                             return RET.ARGUMENT_ERROR;
+                        }
+                        else
+                        {
+                            Handler.Add(HandlerEntry);
                         }
                     }
                 }
@@ -125,9 +134,15 @@ Without arguments the application tries to interpret its file name as a hash.");
                     Handler.RemoveAt(i--);
                 }
             }
+#if !DEBUG
             TorrentHandler.StartAll();
+#endif
 
-            Console.Title = $"QuickTorrent: {Handler.Count(m => m != null)} transfers";
+            if (!Pipe.StartPipe())
+            {
+                Console.Error.WriteLine("Unable to start pipe. Adding torrents at Runtime will be unavailable");
+                Thread.Sleep(5000);
+            }
 
             bool cont = true;
             bool update = false;
@@ -138,6 +153,8 @@ Without arguments the application tries to interpret its file name as a hash.");
                 const int NAMELENGTH = 30;
                 while (cont)
                 {
+                    Console.Title = $"QuickTorrent: {Handler.Count(m => m != null)} transfers";
+
                     int CurrentSelected = Selected;
                     Console.SetCursorPosition(0, 0);
                     if (!RenderDetail)
@@ -289,6 +306,23 @@ Progress: {5:0.00}%", H.TorrentName, H.InfoHash, H.Files, NiceSize(H.TotalSize),
             TorrentHandler.SaveDhtNodes();
             Console.Error.WriteLine("DONE. Cleaning up...");
             return RET.SUCCESS;
+        }
+
+        private static TorrentHandler GetHandler(string Arg)
+        {
+            if (Arg.ToLower().StartsWith("magnet:"))
+            {
+                return new TorrentHandler(ParseLink(Arg));
+            }
+            else if (File.Exists(Arg))
+            {
+                return new TorrentHandler(ParseTorrent(Arg));
+            }
+            else if (ValidHex(Arg))
+            {
+                return new TorrentHandler(ParseHash(Arg));
+            }
+            return null;
         }
 
         private static void WaitForExit()
