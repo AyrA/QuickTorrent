@@ -162,6 +162,8 @@ Without arguments the application tries to interpret its file name as a hash.");
                 }
             }
 
+            Console.Clear();
+
 #if !DEBUG
             TorrentHandler.StartAll();
 #endif
@@ -200,47 +202,49 @@ Without arguments the application tries to interpret its file name as a hash.");
                             for (int j = 0; j < Handler.Count; j++)
                             {
                                 var H = Handler[j];
-                                string Name = H.TorrentName == null ? "" : H.TorrentName;
-                                //Subtraction is: name length, percentage and the 4 spaces
-                                var Map = new string(StretchMap(H.Map, Console.BufferWidth - NAMELENGTH - 8).Select(m => m ? '█' : '░').ToArray());
-                                if (Name.Length > NAMELENGTH)
+                                if (H != null)
                                 {
-                                    Name = Name.Substring(Name.Length - NAMELENGTH, NAMELENGTH);
+                                    string Name = H.TorrentName == null ? "" : H.TorrentName;
+                                    //Subtraction is: name length, percentage and the 4 spaces
+                                    var Map = new string(StretchMap(H.Map, Console.BufferWidth - NAMELENGTH - 8).Select(m => m ? '█' : '░').ToArray());
+                                    if (Name.Length > NAMELENGTH)
+                                    {
+                                        Name = Name.Substring(Name.Length - NAMELENGTH, NAMELENGTH);
+                                    }
+                                    Console.ForegroundColor = ConsoleColor.White;
+                                    Console.Error.Write("{0} ", Selected == j ? '►' : ' ');
+                                    Console.ForegroundColor = StateToColor(H.State);
+                                    switch (H.State)
+                                    {
+                                        case TorrentState.Metadata:
+                                            break;
+                                        case TorrentState.Hashing:
+                                            break;
+                                        case TorrentState.Downloading:
+                                            if (H.HasAllPieces && (int)H.Progress == 100)
+                                            {
+                                                H.Stop();
+                                                H.SaveRecovery();
+                                                H.Start();
+                                            }
+                                            break;
+                                        case TorrentState.Seeding:
+                                            if (!H.HasAllPieces)
+                                            {
+                                                //Assume that this torrent is complete
+                                                H.SetComplete();
+                                            }
+                                            break;
+                                        case TorrentState.Stopped:
+                                        case TorrentState.Stopping:
+                                            break;
+                                        case TorrentState.Paused:
+                                            break;
+                                        default:
+                                            break;
+                                    }
+                                    Console.Error.Write("{0,-" + NAMELENGTH + "} {1,3}% {2}", Name, (int)H.Progress, Map);
                                 }
-                                Console.ForegroundColor = ConsoleColor.White;
-                                Console.Error.Write("{0} ", Selected == j ? '►' : ' ');
-                                Console.ForegroundColor = StateToColor(H.State);
-                                switch (H.State)
-                                {
-                                    case TorrentState.Metadata:
-                                        break;
-                                    case TorrentState.Hashing:
-                                        break;
-                                    case TorrentState.Downloading:
-                                        if (H.HasAllPieces && (int)H.Progress == 100)
-                                        {
-                                            H.Stop();
-                                            H.SaveRecovery();
-                                            H.Start();
-                                        }
-                                        break;
-                                    case TorrentState.Seeding:
-                                        if (!H.HasAllPieces)
-                                        {
-                                            //Assume that this torrent is complete
-                                            H.SetComplete();
-                                        }
-                                        break;
-                                    case TorrentState.Stopped:
-                                    case TorrentState.Stopping:
-                                        break;
-                                    case TorrentState.Paused:
-                                        break;
-                                    default:
-                                        break;
-                                }
-
-                                Console.Error.Write("{0,-" + NAMELENGTH + "} {1,3}% {2}", Name, (int)H.Progress, Map);
                             }
                         }
                         Console.ResetColor();
@@ -285,7 +289,7 @@ Progress: {5:0.00}%",
             T.Start();
 
             #region Keyboard Handler
-            while (cont)
+            while (cont && Handler.Count(m => m != null) > 0)
             {
                 var H = Handler[Selected];
                 switch (Console.ReadKey(true).Key)
@@ -336,6 +340,17 @@ Progress: {5:0.00}%",
                             H.ClearRecovery();
                             H.Dispose();
                             Handler.Remove(H);
+                        }
+                        if (Handler.Count > 0)
+                        {
+                            if (Selected >= Handler.Count)
+                            {
+                                Selected = Handler.Count - 1;
+                            }
+                        }
+                        else
+                        {
+                            cont = false;
                         }
                         update = redraw = true;
                         break;
