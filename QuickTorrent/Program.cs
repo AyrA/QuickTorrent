@@ -36,6 +36,10 @@ namespace QuickTorrent
             /// Invalid executable name for a hash
             /// </summary>
             public const int NAME_ERROR = 2;
+            /// <summary>
+            /// The downloads were transferred to another instance
+            /// </summary>
+            public const int TRANSFER = 3;
         }
 
         public static int Main(string[] args)
@@ -73,7 +77,11 @@ namespace QuickTorrent
                 {
                     lock (Handler)
                     {
-                        Handler.Add(Entry);
+                        //only add if not existing already
+                        if (!Handler.Any(m => m != null && m.InfoHash == Entry.InfoHash))
+                        {
+                            Handler.Add(Entry);
+                        }
                     }
 #if !DEBUG
                     Entry.Start();
@@ -134,15 +142,24 @@ Without arguments the application tries to interpret its file name as a hash.");
                     Handler.RemoveAt(i--);
                 }
             }
+            if (!Pipe.StartPipe())
+            {
+                if (!Handler.Any(m => Pipe.SendViaPipe(m.InfoHash)))
+                {
+                    //We can neither start the pipe nor transfer requests to another client.
+                    Console.Error.WriteLine("Unable to start pipe or transfer downloads to other instance. Adding torrents at Runtime will be unavailable");
+                    Thread.Sleep(5000);
+                }
+                else
+                {
+                    //Requests transferred. Exit application
+                    return RET.TRANSFER;
+                }
+            }
+
 #if !DEBUG
             TorrentHandler.StartAll();
 #endif
-
-            if (!Pipe.StartPipe())
-            {
-                Console.Error.WriteLine("Unable to start pipe. Adding torrents at Runtime will be unavailable");
-                Thread.Sleep(5000);
-            }
 
             bool cont = true;
             bool update = false;

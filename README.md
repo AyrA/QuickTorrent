@@ -73,7 +73,7 @@ Here is the basic todo/feature list. This is not necessarily in the order it wil
 - [X] Piecemap
 - [X] Process command line arguments
 - [X] Handle multiple torrents at once
-- [ ] Join multiple instances into one
+- [X] Join multiple instances into one (Done via pipe)
 - [ ] Possibility for configuration (download path, ports, speeds)
 - [ ] Better User interface
 - [ ] Resolve bug with torrents stuck in "green" state but have all pieces.
