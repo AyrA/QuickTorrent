@@ -19,7 +19,7 @@ namespace QuickTorrent
         {
             try
             {
-                var Listener = new NamedPipeServerStream("QuickTorrent_AddHash", PipeDirection.In, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 1000, 1000);
+                var Listener = new NamedPipeServerStream("QuickTorrent_AddHash", PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 1000, 1000);
                 Listener.BeginWaitForConnection(ConIn, Listener);
             }
             catch (Exception ex)
@@ -45,6 +45,7 @@ namespace QuickTorrent
                         Sender.WaitForPipeDrain();
                         Sender.Close();
                     }
+                    Debug.WriteLine("Transferred torrent " + Content, "OPB_PIPE");
                     return true;
                 }
                 catch (Exception ex)
