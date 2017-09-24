@@ -311,6 +311,34 @@ namespace QuickTorrent
             CE.Register(TM);
         }
 
+        public void ClearRecovery()
+        {
+            var RecoveryFile = Environment.ExpandEnvironmentVariables(TORRENT_DIR + $"\\{TM.InfoHash.ToHex()}.rec");
+            var CacheFile = Environment.ExpandEnvironmentVariables(TORRENT_DIR + $"\\{InfoHash}.torrent");
+            if (File.Exists(RecoveryFile))
+            {
+                try
+                {
+                    File.Delete(RecoveryFile);
+                }
+                catch
+                {
+                }
+
+            }
+            if (File.Exists(CacheFile))
+            {
+                try
+                {
+                    File.Delete(CacheFile);
+                }
+                catch
+                {
+                }
+
+            }
+        }
+
         public void Dispose()
         {
             if (TM != null && CE != null)
