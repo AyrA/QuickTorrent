@@ -12,7 +12,7 @@ Just clone it too and build. You can then set the reference in the QuickTorrent 
 
 ## Downloading
 
-Current version: 1.0. Check the [release section](https://github.com/AyrA/QuickTorrent/releases) for more details.
+Current version: 1.1. Check the [release section](https://github.com/AyrA/QuickTorrent/releases) for more details.
 
 ## Using
 
@@ -86,7 +86,6 @@ With the state the TODO list is in, the solution has these limitations:
 
 - Saves metadata and configuration/state files in APPDATA (non portable)
 - Hardcoded Port for connections (`54321`) and connection count
-- Only one instance at the moment ~~with a single torrent~~
 - All speeds are unrestricted
 - Hardcoded download path: User download folder
 - Only very crude interface.
