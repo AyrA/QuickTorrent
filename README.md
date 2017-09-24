@@ -78,6 +78,7 @@ Here is the basic todo/feature list. This is not necessarily in the order it wil
 - [ ] Better User interface
 - [ ] Resolve bug with torrents stuck in "green" state but have all pieces.
 - [X] Fast resume
+- [ ] Allow resuming without specifying hashes during each launch
 
 ### Current limitations
 
