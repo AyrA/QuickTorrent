@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Threading;
 
@@ -13,8 +14,16 @@ namespace QuickTorrent
 {
     class Program
     {
-        private const int UI_UPDATE_INTERVAL = 1000;
+        private enum DisplayMode
+        {
+            Overview,
+            Details,
+            Tracker
+        }
 
+        private const int UI_UPDATE_INTERVAL = 2000;
+
+        private static DisplayMode CurrentMode = DisplayMode.Overview;
         private static bool LaunchedFromCmd;
         private static List<TorrentHandler> Handler;
 
@@ -47,27 +56,40 @@ namespace QuickTorrent
             LaunchedFromCmd = (ParentProcessUtilities.GetParentProcessName().ToLower() == Environment.ExpandEnvironmentVariables("%COMSPEC%").ToLower());
 #if DEBUG
             args = new string[] {
-                /* <-- Use two slashes to swap the hashes below
-
-                //Debian DVD images
-                "40F90995A1C16A1BF454D09907F57700F3E8BD64",
-                "86F72E6B829C7E2D089B5CF0D1DED09122E65CA4",
-                "E355364EBEB5838B27705C68F85B20A950110B8F"
-
-                /*/
-
-                //Debian CD images
-                "A7055D06E5A8F7F816EC01AC7F7F5243D3CB008F",
-                "63515D99E2A99E79526E35C9A39A1DFD843027A0",
-                "297ACD1A5D6BA3E1AB881E27ACB73843A6E81430",
-                "9E2C34C3FD30D25FED9A23D93FCC69AE546C1D10",
-                "A887676B3E790DD28A92772B776199529F477762",
-                "7980011D310EB8B6F8F5F593E82F83510901CE1C",
-                "90C52B25375F12432D504BAD7F587E5543F22FDA",
-                "1DADBB8451DDDF23ADB276D0C887EF60EC49989E"
-                //*/
+                //2018-04-18-raspbian-stretch-lite.zip
+                "05E76C8B1795CE49E203BE4C39E378F7A97CBED5"
             };
 #endif
+            Console.WriteLine("Grabbing public trackers");
+            using (var CL = new HttpClient())
+            {
+                CL.DefaultRequestHeaders.Add("User-Agent", "AyrA-QuickTorrent/1.0");
+                try
+                {
+                    var Result = CL
+                        .GetAsync("https://cable.ayra.ch/tracker/list.php?prot[]=https&prot[]=http")
+                        .Result;
+                    if (Result.IsSuccessStatusCode)
+                    {
+                        TorrentHandler.PublicTrackers = new List<string>(Result
+                            .Content.ReadAsStringAsync().Result.Split('\n')
+                            .Select(m => m.Trim())
+                            .Where(m => !string.IsNullOrEmpty(m))
+                            .Distinct());
+                    }
+                    else
+                    {
+                        throw new Exception("Unable to download Trackers");
+                    }
+                }
+                catch
+                {
+                    Console.WriteLine("Unable to download public tracker list");
+                    Thread.Sleep(5000);
+                }
+            }
+
+
             Handler = new List<TorrentHandler>();
             //Allows adding torrents via pipe
             Pipe.HashAdded += delegate (string Hash)
@@ -165,7 +187,10 @@ Without arguments the application tries to interpret its file name as a hash.");
             Console.Clear();
 
 #if !DEBUG
-            TorrentHandler.StartAll();
+            foreach (var H in Handler)
+            {
+                H.Start();
+            }
 #endif
             //Thread will exit if set to false
             bool cont = true;
@@ -175,8 +200,6 @@ Without arguments the application tries to interpret its file name as a hash.");
             bool redraw = false;
             //Selected Torrent
             int Selected = 0;
-            //True to render selected torrent detail, false for list
-            bool RenderDetail = false;
             Thread T = new Thread(delegate ()
             {
                 #region Torrent Loop
@@ -184,6 +207,12 @@ Without arguments the application tries to interpret its file name as a hash.");
                 while (cont && Handler.Count(m => m != null) > 0)
                 {
                     Console.Title = $"QuickTorrent: {Handler.Count(m => m != null)} transfers";
+
+                    //Pause this thread while in the tracker selection
+                    while (CurrentMode == DisplayMode.Tracker)
+                    {
+                        Thread.Sleep(100);
+                    }
 
                     int CurrentSelected = Selected;
                     if (redraw)
@@ -195,83 +224,90 @@ Without arguments the application tries to interpret its file name as a hash.");
                     {
                         Console.SetCursorPosition(0, 0);
                     }
-                    if (!RenderDetail)
+                    lock (Handler)
                     {
-                        lock (Handler)
+                        //var H = Handler[j];
+                        switch (CurrentMode)
                         {
-                            for (int j = 0; j < Handler.Count; j++)
-                            {
-                                var H = Handler[j];
-                                if (H != null)
+                            case DisplayMode.Overview:
+                                for (int j = 0; j < Handler.Count; j++)
                                 {
-                                    string Name = H.TorrentName == null ? "" : H.TorrentName;
-                                    //Subtraction is: name length, percentage and the 4 spaces
-                                    var Map = new string(StretchMap(H.Map, Console.BufferWidth - NAMELENGTH - 8).Select(m => m ? '█' : '░').ToArray());
-                                    if (Name.Length > NAMELENGTH)
+
+                                    if (Handler[j] != null)
                                     {
-                                        Name = Name.Substring(Name.Length - NAMELENGTH, NAMELENGTH);
+                                        string Name = Handler[j].TorrentName == null ? "" : Handler[j].TorrentName;
+                                        //Subtraction is: name length, percentage and the 4 spaces
+                                        var LineMap = new string(StretchMap(Handler[j].Map, Console.BufferWidth - NAMELENGTH - 8).Select(m => m ? '█' : '░').ToArray());
+                                        if (Name.Length > NAMELENGTH)
+                                        {
+                                            Name = Name.Substring(Name.Length - NAMELENGTH, NAMELENGTH);
+                                        }
+                                        Console.ForegroundColor = ConsoleColor.White;
+                                        Console.Error.Write("{0} ", Selected == j ? '►' : ' ');
+                                        Console.ForegroundColor = StateToColor(Handler[j].State);
+                                        switch (Handler[j].State)
+                                        {
+                                            case TorrentState.Metadata:
+                                                break;
+                                            case TorrentState.Hashing:
+                                                break;
+                                            case TorrentState.Downloading:
+                                                if (Handler[j].HasAllPieces && (int)Handler[j].Progress == 100)
+                                                {
+                                                    Handler[j].Stop();
+                                                    Handler[j].SaveRecovery();
+                                                    Handler[j].Start();
+                                                }
+                                                break;
+                                            case TorrentState.Seeding:
+                                                if (!Handler[j].HasAllPieces)
+                                                {
+                                                    //Assume that this torrent is complete
+                                                    Handler[j].SetComplete();
+                                                }
+                                                break;
+                                            case TorrentState.Stopped:
+                                            case TorrentState.Stopping:
+                                                break;
+                                            case TorrentState.Paused:
+                                                break;
+                                            default:
+                                                break;
+                                        }
+                                        Console.Error.Write("{0,-" + NAMELENGTH + "} {1,3}% {2}", Name, (int)Handler[j].Progress, LineMap);
                                     }
-                                    Console.ForegroundColor = ConsoleColor.White;
-                                    Console.Error.Write("{0} ", Selected == j ? '►' : ' ');
-                                    Console.ForegroundColor = StateToColor(H.State);
-                                    switch (H.State)
-                                    {
-                                        case TorrentState.Metadata:
-                                            break;
-                                        case TorrentState.Hashing:
-                                            break;
-                                        case TorrentState.Downloading:
-                                            if (H.HasAllPieces && (int)H.Progress == 100)
-                                            {
-                                                H.Stop();
-                                                H.SaveRecovery();
-                                                H.Start();
-                                            }
-                                            break;
-                                        case TorrentState.Seeding:
-                                            if (!H.HasAllPieces)
-                                            {
-                                                //Assume that this torrent is complete
-                                                H.SetComplete();
-                                            }
-                                            break;
-                                        case TorrentState.Stopped:
-                                        case TorrentState.Stopping:
-                                            break;
-                                        case TorrentState.Paused:
-                                            break;
-                                        default:
-                                            break;
-                                    }
-                                    Console.Error.Write("{0,-" + NAMELENGTH + "} {1,3}% {2}", Name, (int)H.Progress, Map);
                                 }
-                            }
-                        }
-                        Console.ResetColor();
-                        Console.Error.WriteLine("[↑↓] Select | [SPACE] Start/Stop | [ENTER] Detail | [DEL] Delete | [ESC] Exit");
-                    }
-                    else
-                    {
-                        var H = Handler[Selected];
-                        Console.ForegroundColor = StateToColor(H.State);
-                        Console.Error.WriteLine("".PadRight(Console.BufferWidth * 7));
-                        Console.SetCursorPosition(0, 0);
-                        Console.Error.WriteLine(@"Transfer Detail
+
+                                Console.ResetColor();
+                                Console.Error.WriteLine("[↑↓] Select | [SPACE] Start/Stop | [ENTER] Detail | [T] Tracker | [DEL] Delete | [ESC] Exit");
+                                break;
+                            case DisplayMode.Details:
+                                Console.ForegroundColor = StateToColor(Handler[Selected].State);
+                                Console.Error.WriteLine("".PadRight(Console.BufferWidth * 7));
+                                Console.SetCursorPosition(0, 0);
+                                Console.Error.WriteLine(@"Transfer Detail
 
 Name:     {0}
 Hash:     {1}
 Files:    {2,-5} ({3})
 State:    {4,-20}
 Progress: {5:0.00}%",
-    H.TorrentName.PadRight(Console.BufferWidth - 11),
-    H.InfoHash,
-    H.Files,
-    NiceSize(H.TotalSize),
-    H.State,
-    Math.Round(H.Progress, 2));
-                        var Map = new string(StretchMap(H.Map, Console.BufferWidth * (Console.WindowHeight - 8)).Select(m => m ? '█' : '░').ToArray());
-                        Console.Error.Write("{0}[ESC] Back", Map);
-                        Console.ResetColor();
+                                    Handler[Selected].TorrentName.PadRight(Console.BufferWidth - 11),
+                                    Handler[Selected].InfoHash,
+                                    Handler[Selected].Files,
+                                    NiceSize(Handler[Selected].TotalSize),
+                                    Handler[Selected].State,
+                                    Math.Round(Handler[Selected].Progress, 2));
+                                var FullMap = new string(StretchMap(Handler[Selected].Map, Console.BufferWidth * (Console.WindowHeight - 8)).Select(m => m ? '█' : '░').ToArray());
+                                Console.Error.Write("{0}[ESC] Back | [T] Tracker", FullMap);
+                                Console.ResetColor();
+                                break;
+                            case DisplayMode.Tracker:
+                                //Don't do anything on tracker, this is done outside of the update loop
+                                break;
+                            default:
+                                throw new NotImplementedException($"Unimplemented Mode: {CurrentMode}");
+                        }
                     }
 
                     int i = 0;
@@ -285,7 +321,7 @@ Progress: {5:0.00}%",
                 }
                 #endregion
             })
-            { IsBackground = true, Name = "Status" };
+            { IsBackground = true, Name = "StatusLoop" };
             T.Start();
 
             #region Keyboard Handler
@@ -294,13 +330,20 @@ Progress: {5:0.00}%",
                 var H = Handler[Selected];
                 switch (Console.ReadKey(true).Key)
                 {
+                    case ConsoleKey.T:
+                        var OldMode = CurrentMode;
+                        CurrentMode = DisplayMode.Tracker;
+                        ManageTracker(H);
+                        CurrentMode = OldMode;
+                        redraw = update = true;
+                        break;
                     case ConsoleKey.Escape:
-                        if (RenderDetail)
+                        if (CurrentMode == DisplayMode.Details || CurrentMode == DisplayMode.Tracker)
                         {
-                            RenderDetail = false;
+                            CurrentMode = DisplayMode.Overview;
                             redraw = update = true;
                         }
-                        else
+                        else if (CurrentMode == DisplayMode.Overview)
                         {
                             cont = false;
                         }
@@ -320,7 +363,7 @@ Progress: {5:0.00}%",
                         update = true;
                         break;
                     case ConsoleKey.Spacebar:
-                        if (H.State == TorrentState.Stopped)
+                        if (H.State == TorrentState.Stopped || H.State == TorrentState.Error)
                         {
                             H.Start();
                             update = true;
@@ -355,11 +398,13 @@ Progress: {5:0.00}%",
                         update = redraw = true;
                         break;
                     case ConsoleKey.Enter:
-                        RenderDetail = update = true;
+                        CurrentMode = DisplayMode.Details;
+                        update = true;
                         break;
                 }
             }
             #endregion
+
             T.Join();
             Console.Error.WriteLine("Exiting...");
             TorrentHandler.StopAll();
@@ -372,6 +417,65 @@ Progress: {5:0.00}%",
             TorrentHandler.SaveDhtNodes();
             Console.Error.WriteLine("DONE. Cleaning up...");
             return RET.SUCCESS;
+        }
+
+        private static void ManageTracker(TorrentHandler H)
+        {
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("Adding and removing trackers is not supported on MonoTorrent");
+            Console.ResetColor();
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("List of public trackers we know:");
+            if (TorrentHandler.PublicTrackers != null)
+            {
+                foreach (var T in TorrentHandler.PublicTrackers)
+                {
+                    Console.WriteLine(T);
+                }
+            }
+            else
+            {
+                Console.WriteLine("none (Download of list failed)");
+            }
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("Trackers registered for this torrent");
+            foreach (var T in H.GetTracker())
+            {
+                Console.WriteLine("{0,-30} {1}", T.Status, T.Uri);
+            }
+            Console.Write("Press any key to go back");
+            Console.ReadKey();
+            /*
+            bool cont = true;
+            while (cont)
+            {
+                Console.Clear();
+                Console.SetCursorPosition(0, Console.WindowHeight - 1);
+                Console.Write("Enter a new tracker URL to add or nothing to go back");
+                Console.SetCursorPosition(0, 0);
+                foreach (var T in H.GetTracker())
+                {
+                    Console.WriteLine(T);
+                }
+                var URL = Console.ReadLine();
+                if (!string.IsNullOrEmpty(URL))
+                {
+                    try
+                    {
+                        H.AddTracker(new Uri(URL));
+                    }
+                    catch
+                    {
+                        //NOOP
+                    }
+                }
+                else
+                {
+                    cont = false;
+                }
+            }
+            //*/
         }
 
         private static TorrentHandler GetHandler(string Arg)
@@ -450,6 +554,19 @@ Progress: {5:0.00}%",
 
         private static MagnetLink ParseLink(string Arg)
         {
+            //Add out public trackers to the link
+            if (TorrentHandler.PublicTrackers != null)
+            {
+                var Trackers = string.Join("&", TorrentHandler.PublicTrackers.Select(m => $"tr={m}"));
+                if (Arg.Contains("?"))
+                {
+                    Arg += (Arg.EndsWith("?") ? "" : "&") + Trackers;
+                }
+                else
+                {
+                    Arg += "?" + Trackers;
+                }
+            }
             return new MagnetLink(Arg);
         }
 

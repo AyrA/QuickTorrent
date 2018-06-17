@@ -2,6 +2,7 @@
 using MonoTorrent.BEncoding;
 using MonoTorrent.Client;
 using MonoTorrent.Client.Encryption;
+using MonoTorrent.Client.Tracker;
 using MonoTorrent.Common;
 using MonoTorrent.Dht;
 using MonoTorrent.Dht.Listeners;
@@ -47,6 +48,8 @@ namespace QuickTorrent
         private static DhtEngine DE;
         private static ClientEngine CE;
         private static EngineSettings ES;
+
+        public static List<string> PublicTrackers;
 
         private TorrentManager TM;
         private TorrentSettings TS;
@@ -158,13 +161,16 @@ namespace QuickTorrent
             InitBase(DownloadDir);
             TM = new TorrentManager(ML, Environment.ExpandEnvironmentVariables(DownloadDir), TS, Environment.ExpandEnvironmentVariables(TORRENT_DIR));
             Assign();
-
         }
 
         public TorrentHandler(Torrent T, string DownloadDir = DOWNLOAD_DIR)
         {
             InitBase(DownloadDir);
             PieceMap = new bool[T.Pieces.Count];
+            foreach (var Tier in InitTracker())
+            {
+                T.AnnounceUrls.Add(Tier);
+            }
             TM = new TorrentManager(T, Environment.ExpandEnvironmentVariables(DownloadDir), TS);
             Assign();
 
@@ -182,7 +188,7 @@ namespace QuickTorrent
             }
             else
             {
-                TM = new TorrentManager(H, Environment.ExpandEnvironmentVariables(DownloadDir), TS, Environment.ExpandEnvironmentVariables(TORRENT_DIR), new List<RawTrackerTier>());
+                TM = new TorrentManager(H, Environment.ExpandEnvironmentVariables(DownloadDir), TS, Environment.ExpandEnvironmentVariables(TORRENT_DIR), InitTracker());
             }
             Assign();
         }
@@ -200,11 +206,25 @@ namespace QuickTorrent
         public void Start()
         {
             TM.Start();
+            foreach (var T in GetTracker())
+            {
+                //TM.TrackerManager.Announce(T);
+            }
         }
 
         public void Stop()
         {
             TM.Stop();
+        }
+
+        private static IList<RawTrackerTier> InitTracker()
+        {
+            List<RawTrackerTier> L = new List<RawTrackerTier>();
+            if (PublicTrackers != null)
+            {
+                L.AddRange(PublicTrackers.Select(m => new RawTrackerTier(new string[] { m })));
+            }
+            return L;
         }
 
         private void InitBase(string DownloadDir)
@@ -250,6 +270,41 @@ namespace QuickTorrent
             }
             TS = new TorrentSettings(10, 200, 0, 0);
         }
+
+        //Setting trackers is currently unsupported in MonoTorrent
+
+        public Tracker[] GetTracker()
+        {
+            if (TM.TrackerManager.CurrentTracker == null)
+            {
+                return new Tracker[0];
+            }
+            return TM.TrackerManager.SelectMany(m => m.GetTrackers()).ToArray();
+        }
+
+        /*
+        public void SetTracker(IEnumerable<Uri> URLs)
+        {
+            var All = GetTracker();
+            foreach (var s in URLs.Where(m => !All.Contains(m)))
+            {
+                AddTracker(s);
+            }
+        }
+
+        public void SetTracker(IEnumerable<string> URLs)
+        {
+            SetTracker(URLs.Select(m => new Uri(m)));
+        }
+
+        public void AddTracker(Uri URL)
+        {
+            Tracker T = TrackerFactory.Create(URL);
+
+            //TM.TrackerManager.Scrape(T);
+            TM.TrackerManager.Announce(T);
+        }
+        //*/
 
         public void SetComplete()
         {
