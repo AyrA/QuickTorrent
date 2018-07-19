@@ -12,7 +12,7 @@ Just clone it too and build. You can then set the reference in the QuickTorrent 
 
 ## Downloading
 
-Current version: 1.1. Check the [release section](https://github.com/AyrA/QuickTorrent/releases) for more details.
+Current version: 1.2. Check the [release section](https://github.com/AyrA/QuickTorrent/releases) for more details.
 
 ## Using
 
