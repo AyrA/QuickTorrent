@@ -49,7 +49,7 @@ namespace QuickTorrent
         private static ClientEngine CE;
         private static EngineSettings ES;
 
-        public static List<string> PublicTrackers;
+        public static readonly List<string> PublicTrackers=new List<string>();
 
         private TorrentManager TM;
         private TorrentSettings TS;

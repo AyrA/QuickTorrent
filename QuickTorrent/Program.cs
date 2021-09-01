@@ -26,6 +26,7 @@ namespace QuickTorrent
         private static DisplayMode CurrentMode = DisplayMode.Overview;
         private static bool LaunchedFromCmd;
         private static List<TorrentHandler> Handler;
+        private static readonly Version CurrentVersion = System.Reflection.Assembly.GetEntryAssembly().GetName().Version;
 
         private struct RET
         {
@@ -55,6 +56,7 @@ namespace QuickTorrent
         {
             System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12;
             LaunchedFromCmd = (ParentProcessUtilities.GetParentProcessName().ToLower() == Environment.ExpandEnvironmentVariables("%COMSPEC%").ToLower());
+            Directory.CreateDirectory(Environment.ExpandEnvironmentVariables(@"%APPDATA%\QuickTorrent"));
 #if DEBUG
             args = new string[] {
                 //2018-04-18-raspbian-stretch-lite.zip
@@ -62,37 +64,19 @@ namespace QuickTorrent
             };
 #endif
             Console.WriteLine("Grabbing public trackers");
-            using (var CL = new HttpClient())
+            try
             {
-                CL.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "AyrA-QuickTorrent/1.0 +https://github.com/AyrA/QuickTorrent");
-                try
+                TorrentHandler.PublicTrackers.AddRange(GetPublicTrackers());
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Unable to download public tracker list");
+                while (ex != null)
                 {
-                    var Result = CL
-                        .GetAsync("https://cable.ayra.ch/tracker/list.php?prot[]=https&prot[]=http")
-                        .Result;
-                    if (Result.IsSuccessStatusCode)
-                    {
-                        TorrentHandler.PublicTrackers = new List<string>(Result
-                            .Content.ReadAsStringAsync().Result.Split('\n')
-                            .Select(m => m.Trim())
-                            .Where(m => !string.IsNullOrEmpty(m))
-                            .Distinct());
-                    }
-                    else
-                    {
-                        throw new Exception("Unable to download Trackers");
-                    }
+                    Console.WriteLine("{0}: {1}", ex.GetType().FullName, ex.Message);
+                    ex = ex.InnerException;
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("Unable to download public tracker list");
-                    while (ex != null)
-                    {
-                        Console.WriteLine("{0}: {1}", ex.GetType().FullName, ex.Message);
-                        ex = ex.InnerException;
-                    }
-                    Thread.Sleep(5000);
-                }
+                Thread.Sleep(5000);
             }
 
 
@@ -152,7 +136,7 @@ Without arguments the application tries to interpret its file name as a hash.");
             }
             else
             {
-                var Hash = Process.GetCurrentProcess().MainModule.FileName.Split(Path.DirectorySeparatorChar).Last().Split('.')[0];
+                var Hash = Path.GetFileNameWithoutExtension(Process.GetCurrentProcess().MainModule.FileName);
                 if (ValidHex(Hash))
                 {
                     Handler.Add(new TorrentHandler(ParseHash(Hash)));
@@ -423,6 +407,42 @@ Progress: {5:0.00}%",
             TorrentHandler.SaveDhtNodes();
             Console.Error.WriteLine("DONE. Cleaning up...");
             return RET.SUCCESS;
+        }
+
+        private static string[] GetPublicTrackers()
+        {
+            string CacheFile = Environment.ExpandEnvironmentVariables(@"%APPDATA%\QuickTorrent\cached-trackers.txt");
+            if (File.Exists(CacheFile) && File.GetLastWriteTimeUtc(CacheFile) > DateTime.UtcNow.AddDays(-1))
+            {
+                return File.ReadAllLines(CacheFile)
+                    .Select(m => m.Trim())
+                    .Where(m => !string.IsNullOrEmpty(m))
+                    .Distinct()
+                    .ToArray();
+            }
+            //Download new tracker list
+            using (var CL = new HttpClient())
+            {
+                CL.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"AyrA-QuickTorrent/{CurrentVersion} +https://github.com/AyrA/QuickTorrent");
+                var Result = CL
+                    .GetAsync("https://cable.ayra.ch/tracker/list.php?prot[]=https&prot[]=http")
+                    .Result;
+                if (Result.IsSuccessStatusCode)
+                {
+                    var Trackers = Result.Content.ReadAsStringAsync().Result
+                        .Split('\n')
+                        .Select(m => m.Trim())
+                        .Where(m => !string.IsNullOrEmpty(m))
+                        .Distinct()
+                        .ToArray();
+                    File.WriteAllLines(CacheFile, Trackers);
+                    return Trackers;
+                }
+                else
+                {
+                    throw new HttpRequestException($"Unable to download Trackers. Status code was {Result.StatusCode} instead of 'OK'");
+                }
+            }
         }
 
         private static void ManageTracker(TorrentHandler H)
