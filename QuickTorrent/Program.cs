@@ -53,6 +53,7 @@ namespace QuickTorrent
 
         public static int Main(string[] args)
         {
+            System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12;
             LaunchedFromCmd = (ParentProcessUtilities.GetParentProcessName().ToLower() == Environment.ExpandEnvironmentVariables("%COMSPEC%").ToLower());
 #if DEBUG
             args = new string[] {
@@ -63,7 +64,7 @@ namespace QuickTorrent
             Console.WriteLine("Grabbing public trackers");
             using (var CL = new HttpClient())
             {
-                CL.DefaultRequestHeaders.Add("User-Agent", "AyrA-QuickTorrent/1.0");
+                CL.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "AyrA-QuickTorrent/1.0 +https://github.com/AyrA/QuickTorrent");
                 try
                 {
                     var Result = CL
@@ -82,9 +83,14 @@ namespace QuickTorrent
                         throw new Exception("Unable to download Trackers");
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
                     Console.WriteLine("Unable to download public tracker list");
+                    while (ex != null)
+                    {
+                        Console.WriteLine("{0}: {1}", ex.GetType().FullName, ex.Message);
+                        ex = ex.InnerException;
+                    }
                     Thread.Sleep(5000);
                 }
             }
