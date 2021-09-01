@@ -1,3 +1,6 @@
 deploy/
 bin/
+obj/
 debug/
+.vs/
+*.user
